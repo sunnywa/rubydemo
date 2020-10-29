@@ -1,20 +1,4 @@
 #!groovy
-
-@NonCPS
-def get_userid() {
-    // userId = "auto"
-    def job = Jenkins.getInstance().getItemByFullName(env.JOB_NAME, Job.class)
-    def build = job.getBuildByNumber(env.BUILD_ID as int)
-    try{
-        def userId = build.getCause(Cause.UserIdCause).getUserId()
-    } catch (Exception e) {
-        return "auto deploy"
-    }
-    def userId = build.getCause(Cause.UserIdCause).getUserId()
-    return userId
-}
-
-
 def call(cfg) {
     // 导入封装的方法
     def method = new org.encapsulation.method()
@@ -22,121 +6,16 @@ def call(cfg) {
     def docker = new org.devops.docker()
     // 导入sonar模块
     // def sonar = new org.devops.sonar()
-    // 导入jira模块
-    // def jira = new org.devops.jira()
     // 导入通用模块
     def anothertool = new org.devops.anothertool()
-    // 获取用户名
-    def BUILD_USER = get_userid()
 
     // 导入默认配置
     method.defaultConf()
 
-    properties([
-        parameters([
-            [$class: 'ChoiceParameter', 
-                choiceType: 'PT_SINGLE_SELECT', 
-                description: '项目组所在namespace',  
-                name: 'NAME_SPACE', 
-                randomName: 'choice-parameter-1', 
-                script: [
-                    $class: 'GroovyScript', 
-                    fallbackScript: [
-                        classpath: [], 
-                        sandbox: false, 
-                        script: 
-                            'return[\'刷新网页\']'
-                    ], 
-                    script: [
-                        classpath: [], 
-                        sandbox: false,
-                        script: 
-                            'return ["demo"]'
-                    ]
-                ]
-            ], 
-            [$class: 'CascadeChoiceParameter', 
-                choiceType: 'PT_SINGLE_SELECT', 
-                description: '请选择Harbor中DockerImage的名字',
-                name: 'DOCKER_IMAGE', 
-                randomName: 'choice-parameter-2', 
-                referencedParameters: 'NAME_SPACE', 
-                script: [
-                    $class: 'GroovyScript', 
-                    fallbackScript: [
-                        classpath: [], 
-                        sandbox: false, 
-                        script: 
-                            'return[\'没有选择任何的项目\']'
-                    ], 
-                    script: [
-                        classpath: [], 
-                        sandbox: false, 
-                        script: 
-                            '''import groovy.json.JsonSlurper
-							def Get_env() {
-							  def project_name_list = []
-							  def conn ="https://hub.docker.com/v2/repositories/a7179072/"
-							  def parser = new JsonSlurper()
-							  def http = new URL(conn).openConnection()
-							  http.setRequestMethod('GET')
-							  def getRC = http.getResponseCode()
-							  if(getRC.equals(200)) {
-								res=http.getInputStream().getText()
-								def json = parser.parseText(res)["results"]
-								for (project in json){
-								  println project.name
-								  project_name_list += project.name
-								}
-								return project_name_list
-							  }
-							}
-							Get_env()'''
-                    ]
-                ]
-            ],
-            [$class: 'CascadeChoiceParameter', 
-                choiceType: 'PT_SINGLE_SELECT', 
-                description: '请选择Harbor中Docker的TAG', 
-                name: 'GROUPA_DOCKER_TAG',
-                randomName: 'choice-parameter-3', 
-                referencedParameters: 'NAME_SPACE,DOCKER_IMAGE',
-                script: [
-                    $class: 'GroovyScript', 
-                    fallbackScript: [
-                        classpath: [], 
-                        sandbox: false, 
-                        script: 
-                            'return[\'没有选择任何的项目\']'
-                    ], 
-                    script: [
-                        classpath: [], 
-                        sandbox: false, 
-                        script: 
-							'''import groovy.json.JsonSlurper
-							def Get_env(DOCKER_IMAGE) {
-							  def project_name_list = []
-							  def conn ="https://hub.docker.com/v2/repositories/a7179072/${DOCKER_IMAGE}/tags/"
-							  def parser = new JsonSlurper()
-							  def http = new URL(conn).openConnection()
-							  http.setRequestMethod('GET')
-							  def getRC = http.getResponseCode()
-							  if(getRC.equals(200)) {
-								res=http.getInputStream().getText()
-								def json = parser.parseText(res)["results"]
-								for (project in json){
-								  println project.name
-								  project_name_list += project.name
-								}
-								return project_name_list
-							  }
-							}
-							Get_env(DOCKER_IMAGE)'''
-                    ]
-                ]
-            ]
-        ])
-    ])
+    branchName = anothertool.GetBranch("${pushCategory}","${branch}")
+        
+
+
     pipeline {
         agent {
             kubernetes {
@@ -149,21 +28,67 @@ def call(cfg) {
         options {
             timestamps()  //日志会有时间
             skipDefaultCheckout()  //删除隐式checkout scm语句
-            disableConcurrentBuilds() //禁止并行
+            // disableConcurrentBuilds() //禁止并行
             timeout(time: 1, unit: 'HOURS')  //流水线超时设置1h
         }
         
 
+        // 参数设置
+        // parameters {
+        // }
 
+        triggers {
+            GenericTrigger(
+                genericVariables: [
+                // 触发类型分BRANCH 与 tag
+                [defaultValue: 'NOMSG',key: 'pushCategory', value: '$.object_kind'],
+                // 触发分支名称
+                [defaultValue: 'NOMSG',key: 'BRANCH', value: '$.ref'],
+                // 修改代码的用户名
+                [defaultValue: 'NOMSG',key: 'USERNAME', value: '$.user_username'],
+                // 发版地址
+                [defaultValue: 'NOMSG',key: 'url', value: '$.project.web_url'],
+                // 删除tag分支
+                [defaultValue: 'NOMSG',key: 'after', value: '$.after'],
+                // 项目名称
+                [defaultValue: 'NOMSG',key: 'PROJECT', value: '$.project.name'],
+                // Commit项目名称
+                [defaultValue: 'NOMSG',key: 'COMMMIT_MESSAGE', value: '$.commits[-1].message'],
+                // GitlabGroup名称
+                [defaultValue: 'NOMSG',key: 'GITLAB_GROUP', value: '$.project.namespace'],
+                ],
+
+                genericRequestVariables: [
+                [key: "runOpts"]
+                ],	
+
+                causeString: 'Generic Cause',
+
+                token: JOB_NAME,
+
+                printContributedVariables: true,
+                printPostContent: true,
+                silentResponse: true,
+
+                // regexpFilterExpression: '(CI|Ci|cI|ci):.*',
+                // regexpFilterText: '$COMMMIT_MESSAGE'
+
+            )
+        }
 
         // 常量参数，初始确定后一般不需更改
-        // environment {
-        // }
+        environment {
+            CRED_ID = "gitlab-token"
+            // 声明全局变量
+            DOCKER_GROUP = "a7179072"
+            DOCKER_IMAGE_TAG = ""
+        }
 
         post {
             success {
                 script{
                     currentBuild.description = "\n 构建成功!" 
+                    // method.notice("success","${cfg.CI_ROBOT_ID}","${JOB_NAME}","${JOB_URL}","${BUILD_USER}","build success")
                 }
             }
 
@@ -171,6 +96,7 @@ def call(cfg) {
             failure {
                 script{
                     currentBuild.description = "\n 构建失败!" 
+                    // method.notice("error","${cfg.CI_ROBOT_ID}","${JOB_NAME}","${JOB_URL}","${BUILD_USER}","build faild")
                 }
             }
             
@@ -180,57 +106,77 @@ def call(cfg) {
                 }
             }
 
-  //          always {
-  //              cleanWs()
-  //          }
+            // always {
+            //     cleanWs()
+            // }
         }
 
         //步骤设置
         stages {
-            
-            // stage('确认发版') {
-            //     input {
-            //         message "您发版的项目为${Release_Project},是否继续?"
-            //         ok '确定'
-            //     }
-            //     steps{
-            //         println Release_Project
-            //     }   
-            // }
-
-            stage('物理环境部署') {
+            stage('处理一些变量'){
+                when { expression {
+                    return  (runOpts == "auto")
+                    }
+                }
                 steps {
-                    script {
-                        dir("ansible") {
-                            //发版服务器ip地址列表
-                            def machine_list = "${map.server}".split(',')
-                            for (String host in machine_list) {
-                                sh "cp hosts hosts_deploy -rp"
-                                sh "sed -i '1 a${host}' hosts_deploy"
-                                sh "ansible-playbook deploy.yml -i hosts_deploy -e DOCKER_IMAGE=${DOCKER_IMAGE} GROUPA_DOCKER_TAG=${GROUPA_DOCKER_TAG}  --tags=deploy"
-                            }
+                    script{
+                        DOCKER_IMAGE_TAG = "${branchName}"
+                    }
+                }
+            }
+            stage('CI获取版本库代码') {
+                when { expression {
+                    return  (runOpts == "auto")
+                    }
+                }
+                steps {
+                    script{
+                        anothertool.PrintMes("CI CODE PULL BEGIN","green")
+                        method.gitscm("${branchName}","${url}")
+                        anothertool.PrintMes("CI CODE PULL OVER","green")
+                        // 覆盖配置文件
+                        cfg = pipelineCfg()
+                        println cfg
+                    }
+                }
+            }
+
+            stage('推送docker') {
+                when { expression {
+                    return  (runOpts == "auto")
+                    }
+                }
+                steps {
+                    container('jnlp-agent-docker') {
+                        script{
+                            docker.PushHarborDocker("${PROJECT}","test-${DOCKER_IMAGE_TAG}","${DOCKER_GROUP}")
                         }
                     }
                 }
             }
 
-            // stage('kubernetes环境部署服务') {
+            // stage('打包推送到helm') {
+            //     when { expression {
+            //         return  (runOpts == "auto")
+            //         }
+            //     }
             //     steps {
-            //          container("kubectl-demo") {
+            //         container("${cfg.CI_EKS_NAME}") {
             //             script{
-			// 				 withCredentials([usernamePassword(credentialsId: 'harbor-admin', passwordVariable: 'password', usernameVariable: 'username')]) {
-            //                      sh """
-            //                      aws eks --region \$REGION update-kubeconfig --name \$EKS_NAME
-            //                      helm repo add --username=${username} --password=${password} ${DOCKER_IMAGE} https://harbor_url/chartrepo/${NAME_SPACE}
-            //                      helm repo update
-            //                      helm upgrade -i -n fps-server --set server.image.tag=${GROUPA_DOCKER_TAG}  ${DOCKER_IMAGE} ${DOCKER_IMAGE}/${DOCKER_IMAGE}
-            //                      """
-            //                  }
+            //                 // dir("${JOB_NAME}-${BUILD_NUMBER}/${COMMMIT_MESSAGE}/deployment/helm/"){
+            //                 dir("${COMMMIT_MESSAGE}/deployment/helm/"){
+            //                     withCredentials([usernamePassword(credentialsId: 'harbor-admin', passwordVariable: 'password', usernameVariable: 'username')]) {
+            //                         sh """
+            //                         HELM_PACKAGE_NAME=`helm package ${COMMMIT_MESSAGE}| awk -F '/' '{print \$NF}'`
+            //                         helm repo add --username=${username} --password=${password}  ${COMMMIT_MESSAGE} https://${HARBOR_URL}/chartrepo/${GITLAB_GROUP}
+            //                         helm push \$HELM_PACKAGE_NAME ${COMMMIT_MESSAGE}
+            //                         """
+            //                     }
+            //                 }
             //             }
-            //          }
+            //         }
             //     }
             // }
-            
         }
     }
 }
