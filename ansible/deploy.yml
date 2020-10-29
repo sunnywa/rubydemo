@@ -1,0 +1,8 @@
+- hosts: deploy
+  sudo: yes
+  roles:
+    - role: deploy
+      vars:
+        DOCKER_IMAGE: "{{ DOCKER_IMAGE}}"
+        GROUPA_DOCKER_TAG: "{{ GROUPA_DOCKER_TAG }}"
+      tags: ["deploy"]

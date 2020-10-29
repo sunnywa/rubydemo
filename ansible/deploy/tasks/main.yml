@@ -1,0 +1,14 @@
+﻿---
+#author yehe
+
+- name: Install | bundle install
+  shell:
+    docker pull {{ DOCKER_IMAGE }}:{{ GROUPA_DOCKER_TAG }}
+
+- name: Install | Stop service
+  shell:
+    docker stop `docker ps | grep {{ DOCKER_IMAGE }} |awk '{print $1}'`
+    
+- name: Install | Run service
+  shell:
+   docker run -p 3000:3000 {{ DOCKER_IMAGE }}:{{ GROUPA_DOCKER_TAG }}
