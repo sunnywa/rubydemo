@@ -1,0 +1,17 @@
+- hosts: deploy
+  sudo: yes
+  roles:
+    - role: deploy
+      vars:
+        CODE_FILE: "{{ CODE_FILE }}"
+        PM2_SERVICE: "{{ PM2_SERVICE }}"
+        CODE_PATH: "{{ CODE_PATH }}"
+        CODE_CONFIG: "{{ CODE_CONFIG }}"
+        CARGO: "{{ CARGO }}"
+        BUILD_ID: "{{ BUILD_ID }}"
+      tags: ["deploy"]
+
+    - role: restart
+      vars:
+        USE_SCRIPT: "{{ USE_SCRIPT }}"
+      tags: ["restart"]

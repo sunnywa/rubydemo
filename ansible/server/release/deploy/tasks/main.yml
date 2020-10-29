@@ -1,0 +1,61 @@
+---
+#author yehe
+
+#拷贝代码
+- name: Configure | Cp {{ PM2_SERVICE }}
+  copy:
+    src: "{{ CODE_FILE }}"
+    dest: "{{ CODE_FILE }}"
+
+#创建目录
+- name: Configure | Mkdir home
+  file:
+    path: "{{ CODE_PATH }}"
+    state: directory
+  ignore_errors: True
+  
+#备份代码
+- name: Configure | Mkdir Backup Path
+  shell:
+    mkdir /tmp/{{ PM2_SERVICE }}/{{ BUILD_ID }} -p
+
+- name: Configure | Backup Code
+  shell:
+    mv {{ CODE_PATH }}/* /tmp/{{ PM2_SERVICE }}/{{ BUILD_ID }}
+  ignore_errors: True
+
+#拷贝回upload目录
+- name: Configure | MV upload
+  shell:
+    mv /tmp/{{ PM2_SERVICE }}/{{BUILD_ID}}/{{ item.path }} {{ CODE_PATH }}/
+  with_items:
+    - { path: upload}
+    - { path: logs}
+  ignore_errors: True
+
+#创建目录
+- name: Configure | Mkdir home
+  file:
+    path: "{{ CODE_PATH }}"
+    state: directory
+  ignore_errors: True
+
+#部署代码
+- name: Configure | Copy packages
+  shell:
+    tar zxvf {{ CODE_FILE }} -C {{ CODE_PATH }}
+
+#修改配置文件
+- name: Configure | Change confile file
+  shell:
+    cp -rp {{ CODE_CONFIG }} {{ CODE_PATH }}/config/settings.js
+
+#部署服务
+- name: Install | Install {{ PM2_SERVICE }}
+  shell:
+    cd {{ CODE_PATH }};npm install --unsafe-perm
+
+- name: Install Install cargo
+  shell:
+    cd {{ CODE_PATH }}/cargo;npm install --unsafe-perm
+  when: CARGO |bool
